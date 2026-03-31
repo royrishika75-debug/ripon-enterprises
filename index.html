@@ -9,8 +9,6 @@ body { font-family: Arial; margin:0; background:#f4f4f4; }
 .container { padding:20px; }
 .card { background:white; padding:15px; margin:10px 0; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);} 
 button { padding:8px 12px; margin:5px; border:none; border-radius:5px; background:#007bff; color:white; cursor:pointer; }
-button.delete { background:#dc3545; }
-button.edit { background:#28a745; }
 input { padding:10px; margin:5px 0; width:100%; }
 .hidden { display:none; }
 </style>
@@ -37,7 +35,7 @@ input { padding:10px; margin:5px 0; width:100%; }
 <h2>Stock</h2>
 <input id="itemName" placeholder="Item Name">
 <input id="itemQty" type="number" placeholder="Quantity">
-<button onclick="addStock()">Add/Update</button>
+<button onclick="addStock()">Add</button>
 <div id="stockList"></div>
 <button onclick="back()">Back</button>
 </div>
@@ -60,12 +58,22 @@ input { padding:10px; margin:5px 0; width:100%; }
 <button onclick="back()">Back</button>
 </div>
 
-<script>
-let stock = JSON.parse(localStorage.getItem('stock')) || {};
-let purchases = JSON.parse(localStorage.getItem('purchases')) || [];
-let editIndex = -1;
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-function login() {
+// 🔥 PASTE YOUR FIREBASE CONFIG HERE
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// LOGIN
+window.login = function() {
   const u = document.getElementById('username').value;
   const p = document.getElementById('password').value;
   if(u === 'admin' && p === '1234') {
@@ -76,98 +84,66 @@ function login() {
   }
 }
 
-function logout() { location.reload(); }
+window.logout = function() { location.reload(); }
 
-function showPage(page) {
+window.showPage = function(page) {
   document.querySelectorAll('.container').forEach(c => c.classList.add('hidden'));
   document.getElementById(page).classList.remove('hidden');
-  if(page === 'stock') renderStock();
-  if(page === 'purchase') renderPurchases();
-  if(page === 'sales') renderSales();
+  if(page === 'stock') loadStock();
+  if(page === 'purchase') loadPurchases();
+  if(page === 'sales') loadSales();
 }
 
-function back() { showPage('dashboard'); }
+window.back = function() { showPage('dashboard'); }
 
 // STOCK
-function addStock() {
+window.addStock = async function() {
   const name = document.getElementById('itemName').value;
   const qty = parseInt(document.getElementById('itemQty').value);
-  if(!name || isNaN(qty)) return;
-  stock[name] = (stock[name] || 0) + qty;
-  localStorage.setItem('stock', JSON.stringify(stock));
-  renderStock();
+
+  await addDoc(collection(db, "stock"), { name, qty });
+  loadStock();
 }
 
-function deleteStock(item) {
-  delete stock[item];
-  localStorage.setItem('stock', JSON.stringify(stock));
-  renderStock();
-}
-
-function renderStock() {
+async function loadStock() {
+  const querySnapshot = await getDocs(collection(db, "stock"));
   let html = '';
-  for(let item in stock) {
-    html += `<div class='card'>${item}: ${stock[item]} 
-    <button class='delete' onclick="deleteStock('${item}')">Delete</button></div>`;
-  }
+  querySnapshot.forEach(doc => {
+    const data = doc.data();
+    html += `<div class='card'>${data.name}: ${data.qty}</div>`;
+  });
   document.getElementById('stockList').innerHTML = html;
 }
 
 // PURCHASE
-function addPurchase() {
+window.addPurchase = async function() {
   const item = document.getElementById('pItem').value;
   const qty = parseInt(document.getElementById('pQty').value);
   const price = parseFloat(document.getElementById('pPrice').value);
   const cost = parseFloat(document.getElementById('pCost').value);
 
-  if(!item || isNaN(qty) || isNaN(price) || isNaN(cost)) return;
-
-  if(editIndex === -1) {
-    purchases.push({item, qty, price, cost});
-  } else {
-    purchases[editIndex] = {item, qty, price, cost};
-    editIndex = -1;
-  }
-
-  stock[item] = (stock[item] || 0) - qty;
-
-  localStorage.setItem('purchases', JSON.stringify(purchases));
-  localStorage.setItem('stock', JSON.stringify(stock));
-
-  renderPurchases();
+  await addDoc(collection(db, "purchases"), { item, qty, price, cost });
+  loadPurchases();
 }
 
-function deletePurchase(index) {
-  purchases.splice(index, 1);
-  localStorage.setItem('purchases', JSON.stringify(purchases));
-  renderPurchases();
-}
-
-function editPurchase(index) {
-  const p = purchases[index];
-  document.getElementById('pItem').value = p.item;
-  document.getElementById('pQty').value = p.qty;
-  document.getElementById('pPrice').value = p.price;
-  document.getElementById('pCost').value = p.cost;
-  editIndex = index;
-}
-
-function renderPurchases() {
+async function loadPurchases() {
+  const querySnapshot = await getDocs(collection(db, "purchases"));
   let html = '';
-  purchases.forEach((p, i) => {
-    html += `<div class='card'>${p.item} - ${p.qty} pcs - ₹${p.price}
-    <button class='edit' onclick="editPurchase(${i})">Edit</button>
-    <button class='delete' onclick="deletePurchase(${i})">Delete</button></div>`;
+  querySnapshot.forEach(doc => {
+    const p = doc.data();
+    html += `<div class='card'>${p.item} - ${p.qty} pcs - ₹${p.price}</div>`;
   });
   document.getElementById('purchaseList').innerHTML = html;
 }
 
 // SALES
-function renderSales() {
+async function loadSales() {
+  const querySnapshot = await getDocs(collection(db, "purchases"));
   let totalSales = 0;
   let totalProfit = 0;
 
-  purchases.forEach(p => {
+  querySnapshot.forEach(doc => {
+    const p = doc.data();
     totalSales += p.price * p.qty;
     totalProfit += (p.price - p.cost) * p.qty;
   });
