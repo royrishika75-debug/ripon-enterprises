@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ripon Enterprises</title>
+<style>
+body { font-family: Arial; margin:0; background:#f4f4f4; }
+.container { padding:20px; }
+.card { background:white; padding:15px; margin:10px 0; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.1);} 
+button { padding:8px 12px; margin:5px; border:none; border-radius:5px; background:#007bff; color:white; cursor:pointer; }
+button.delete { background:#dc3545; }
+button.edit { background:#28a745; }
+input { padding:10px; margin:5px 0; width:100%; }
+.hidden { display:none; }
+</style>
+</head>
+<body>
+
+<div id="login" class="container">
+<h2>Welcome to Ripon Enterprises</h2>
+<input id="username" placeholder="Username">
+<input id="password" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<p id="loginError" style="color:red;"></p>
+</div>
+
+<div id="dashboard" class="container hidden">
+<h2>Dashboard</h2>
+<button onclick="showPage('stock')">Stock</button>
+<button onclick="showPage('purchase')">Customer Purchase</button>
+<button onclick="showPage('sales')">Sales</button>
+<button onclick="logout()">Logout</button>
+</div>
+
+<div id="stock" class="container hidden">
+<h2>Stock</h2>
+<input id="itemName" placeholder="Item Name">
+<input id="itemQty" type="number" placeholder="Quantity">
+<button onclick="addStock()">Add/Update</button>
+<div id="stockList"></div>
+<button onclick="back()">Back</button>
+</div>
+
+<div id="purchase" class="container hidden">
+<h2>Customer Purchase</h2>
+<input id="pItem" placeholder="Item Name">
+<input id="pQty" type="number" placeholder="Quantity">
+<input id="pPrice" type="number" placeholder="Selling Price">
+<input id="pCost" type="number" placeholder="Cost Price">
+<button onclick="addPurchase()">Add Purchase</button>
+<div id="purchaseList"></div>
+<button onclick="back()">Back</button>
+</div>
+
+<div id="sales" class="container hidden">
+<h2>Sales</h2>
+<p id="totalSales"></p>
+<p id="totalProfit"></p>
+<button onclick="back()">Back</button>
+</div>
+
+<script>
+let stock = JSON.parse(localStorage.getItem('stock')) || {};
+let purchases = JSON.parse(localStorage.getItem('purchases')) || [];
+let editIndex = -1;
+
+function login() {
+  const u = document.getElementById('username').value;
+  const p = document.getElementById('password').value;
+  if(u === 'admin' && p === '1234') {
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+  } else {
+    document.getElementById('loginError').innerText = 'Invalid login';
+  }
+}
+
+function logout() { location.reload(); }
+
+function showPage(page) {
+  document.querySelectorAll('.container').forEach(c => c.classList.add('hidden'));
+  document.getElementById(page).classList.remove('hidden');
+  if(page === 'stock') renderStock();
+  if(page === 'purchase') renderPurchases();
+  if(page === 'sales') renderSales();
+}
+
+function back() { showPage('dashboard'); }
+
+// STOCK
+function addStock() {
+  const name = document.getElementById('itemName').value;
+  const qty = parseInt(document.getElementById('itemQty').value);
+  if(!name || isNaN(qty)) return;
+  stock[name] = (stock[name] || 0) + qty;
+  localStorage.setItem('stock', JSON.stringify(stock));
+  renderStock();
+}
+
+function deleteStock(item) {
+  delete stock[item];
+  localStorage.setItem('stock', JSON.stringify(stock));
+  renderStock();
+}
+
+function renderStock() {
+  let html = '';
+  for(let item in stock) {
+    html += `<div class='card'>${item}: ${stock[item]} 
+    <button class='delete' onclick="deleteStock('${item}')">Delete</button></div>`;
+  }
+  document.getElementById('stockList').innerHTML = html;
+}
+
+// PURCHASE
+function addPurchase() {
+  const item = document.getElementById('pItem').value;
+  const qty = parseInt(document.getElementById('pQty').value);
+  const price = parseFloat(document.getElementById('pPrice').value);
+  const cost = parseFloat(document.getElementById('pCost').value);
+
+  if(!item || isNaN(qty) || isNaN(price) || isNaN(cost)) return;
+
+  if(editIndex === -1) {
+    purchases.push({item, qty, price, cost});
+  } else {
+    purchases[editIndex] = {item, qty, price, cost};
+    editIndex = -1;
+  }
+
+  stock[item] = (stock[item] || 0) - qty;
+
+  localStorage.setItem('purchases', JSON.stringify(purchases));
+  localStorage.setItem('stock', JSON.stringify(stock));
+
+  renderPurchases();
+}
+
+function deletePurchase(index) {
+  purchases.splice(index, 1);
+  localStorage.setItem('purchases', JSON.stringify(purchases));
+  renderPurchases();
+}
+
+function editPurchase(index) {
+  const p = purchases[index];
+  document.getElementById('pItem').value = p.item;
+  document.getElementById('pQty').value = p.qty;
+  document.getElementById('pPrice').value = p.price;
+  document.getElementById('pCost').value = p.cost;
+  editIndex = index;
+}
+
+function renderPurchases() {
+  let html = '';
+  purchases.forEach((p, i) => {
+    html += `<div class='card'>${p.item} - ${p.qty} pcs - ₹${p.price}
+    <button class='edit' onclick="editPurchase(${i})">Edit</button>
+    <button class='delete' onclick="deletePurchase(${i})">Delete</button></div>`;
+  });
+  document.getElementById('purchaseList').innerHTML = html;
+}
+
+// SALES
+function renderSales() {
+  let totalSales = 0;
+  let totalProfit = 0;
+
+  purchases.forEach(p => {
+    totalSales += p.price * p.qty;
+    totalProfit += (p.price - p.cost) * p.qty;
+  });
+
+  document.getElementById('totalSales').innerText = 'Total Sales: ₹' + totalSales;
+  document.getElementById('totalProfit').innerText = 'Total Profit: ₹' + totalProfit;
+}
+</script>
+
+</body>
+</html>
